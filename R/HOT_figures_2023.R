@@ -106,7 +106,7 @@ aloha_long$day <- as.factor(lubridate::yday(aloha_long$local_time))
 #################
 
 ### INFLUX ###
-influx_file <- paste0(save_path, 'HOT_influx.csv') # Data from HOT-DOGS 
+influx_file <- paste0(save_path, 'Data/HOT_influx.csv') # Data from HOT-DOGS 
 influx <- read.csv(influx_file)     # abundances are in 10E5 cells/mL
 influx <- influx[-1, ]
 in_date <- substr(as.character(influx$date), 2, 7)
@@ -383,9 +383,9 @@ dev.off()
 
 # Rain results
 
-rain_file1 <- paste0(save_path, 'HOT_rain_results_2021_12_25.csv')  # peaks (relevant for Qc)
+rain_file1 <- paste0(save_path, 'Data/HOT_rain_results_2021_12_25.csv')  # peaks (relevant for Qc)
 big_rain_peak <- read.csv(rain_file1)
-rain_file2 <- paste0(save_path, 'HOT_rain_results_2022_01_03_troughs.csv')   # troughs (relevant for abundance)
+rain_file2 <- paste0(save_path, 'Data/HOT_rain_results_2022_01_03_troughs.csv')   # troughs (relevant for abundance)
 big_rain_trough <- read.csv(rain_file2)
 
 big_rain <- rbind(subset(big_rain_peak, param == 'Qc'), subset(big_rain_trough, param == 'abundance'))
