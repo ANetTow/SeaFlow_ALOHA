@@ -476,8 +476,8 @@ HOT_POC$day <- lubridate::yday(HOT_POC$date)
 HOT_POC$year <- lubridate::year(HOT_POC$date)
 HOT_POC$month <- lubridate::month(HOT_POC$date) 
 
-# Split double cruises by bumping late month cruises to the next month for KM2011/HOT323
-mo_list_date <- c(as.POSIXct("2020-09-28 00:59:58", tz = "UTC"), as.POSIXct("2020-09-29 01:07:07", tz = "UTC"))    
+# Split double cruises by bumping late month cruises to the next month for KM2011/HOT323, HOT319 borders Jan and Feb
+mo_list_date <- c(as.POSIXct("2020-01-31 02:14:22", tz = "UTC"), as.POSIXct("2020-09-28 00:59:58", tz = "UTC"), as.POSIXct("2020-09-29 01:07:07", tz = "UTC"))    
 ind_mo <- which(HOT_POC$date %in% mo_list_date)
 HOT_POC$month[ind_mo] <- HOT_POC$month[ind_mo] + 1
 
