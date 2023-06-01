@@ -106,13 +106,13 @@ aloha_long$day <- as.factor(lubridate::yday(aloha_long$local_time))
 #################
 
 ### INFLUX ###
-influx_file <- paste0(save_path, 'Data/HOT_influx.csv') # Data from HOT-DOGS 
-influx <- read.csv(influx_file)     # abundances are in 10E5 cells/mL
-influx <- influx[-1, ]
-in_date <- substr(as.character(influx$date), 2, 7)
-in_date[which(grepl('-00009', in_date))] <- NA
-in_time <- substr(as.character(influx$time), 2, 7)
-in_time[which(grepl('-00009', in_time))] <- NA
+influx <- read.csv(paste0(save_path, "Data/HOT_influx.csv"), skip = 5, header = F)  # Data from HOT-DOGS
+in_head <- read.csv(paste0(save_path, "Data/HOT_influx.csv"), skip = 2, nrows = 1)
+colnames(influx) <- colnames(in_head)
+  
+influx[influx == -9] <- NA # Flagged values
+in_date <- stringr::str_pad(influx$date, 6, side = "left", pad = 0)
+in_time <- stringr::str_pad(influx$time, 6, side = "left", pad = 0)
 t_influx <- as.POSIXct(paste0(in_date, ' ', in_time), format = '%m%d%y %H%M%S', tz = 'UTC')
 influx$DateTime <- t_influx
 
@@ -126,19 +126,22 @@ influx$pro[which(influx$pro < -1)] <- NA
 
 post_influx <- influx[, c('DateTime', 'pro', 'syn', 'peuk')]
 
-# Only keep influx data after SeaFlow started (December, 2014)
-influx_keep <- subset(post_influx, DateTime > lubridate::as_date('2014-12-01'))
-
 influx_db <- NULL
-for (i in seq(1, nrow(influx_keep))){
-    pro <- data.frame(time = influx_keep$DateTime[i], abundance = influx_keep$pro[i], pop = 'prochloro')
-    syn <- data.frame(time = influx_keep$DateTime[i], abundance = influx_keep$syn[i], pop = 'synecho')
-    pico <- data.frame(time = influx_keep$DateTime[i], abundance = influx_keep$peuk[i], pop = 'euk')
+for (i in seq(1, nrow(post_influx))){
+    pro <- data.frame(time = post_influx$DateTime[i], abundance = post_influx$pro[i], pop = 'prochloro')
+    syn <- data.frame(time = post_influx$DateTime[i], abundance = post_influx$syn[i], pop = 'synecho')
+    pico <- data.frame(time = post_influx$DateTime[i], abundance = post_influx$peuk[i], pop = 'euk')
     influx_db <- rbind(influx_db, pro, syn, pico)
 }
 
 influx_db$month <- lubridate::month(influx_db$time)
 influx_db$year <- lubridate::year(influx_db$time)
+
+# Split double cruises by bumping late month cruises to the next month for KM2011/HOT323
+mo_list_date <- c(as.POSIXct("2020-09-26 13:19:36", tz = "UTC"))    
+ind_mo <- which(influx_db$time %in% mo_list_date)
+influx_db$month[ind_mo] <- influx_db$month[ind_mo] + 1
+
 influx_db$Amin <- NA # Blank variable for error bars
 influx_db$Amax <- NA
 influx_db$pop <- factor(influx_db$pop, levels = c('prochloro', 'synecho', 'euk', 'croco'))
@@ -459,20 +462,26 @@ dev.off()
 ###############
 
 # Get particulate carbon from HOT
-HOT_POC <- read.csv(paste0(save_path, "Data/HOT_PC_ATP.csv"), skip = 7, header = F)
-POC_head <- read.csv(paste0(save_path, "Data/HOT_PC_ATP.csv"), skip = 4, nrows = 1)
+HOT_POC <- read.csv(paste0(save_path, "Data/HOT_PC_ATP.csv"), skip = 6, header = F)
+POC_head <- read.csv(paste0(save_path, "Data/HOT_PC_ATP.csv"), skip = 3, nrows = 1)
 colnames(HOT_POC) <- colnames(POC_head)
 
 HOT_POC$cruise <- paste0('HOT', substr(as.character(HOT_POC$botid), 1, 3))
 HOT_POC[HOT_POC == -9] <- NA
 HOT_POC$date <- str_pad(HOT_POC$date, 6, side = "left", pad = 0)
-HOT_POC$month <- substr(HOT_POC$date, 1, 2)
-HOT_POC$day <- substr(HOT_POC$date, 3, 4)
-HOT_POC$year <- paste0("20", substr(HOT_POC$date, 5, 6))
-HOT_POC$date <- paste0(HOT_POC$year, "-", HOT_POC$month, "-", HOT_POC$day)
 HOT_POC$time <- str_pad(HOT_POC$time, 6, side = "left", pad = 0)
-HOT_POC$date <- as.POSIXct(paste0(HOT_POC$date, " ", HOT_POC$time), format = "%Y-%m-%d %H%M%S", tz = "GMT")
-HOT_Clive <- HOT_POC %>%    # This is taking the monthly mean, but there are no repeats within a month in this data set
+HOT_POC$date <- as.POSIXct(paste0(HOT_POC$date, " ", HOT_POC$time), format = "%m%d%y %H%M%S", tz = "UTC")
+
+HOT_POC$day <- lubridate::yday(HOT_POC$date)
+HOT_POC$year <- lubridate::year(HOT_POC$date)
+HOT_POC$month <- lubridate::month(HOT_POC$date) 
+
+# Split double cruises by bumping late month cruises to the next month for KM2011/HOT323
+mo_list_date <- c(as.POSIXct("2020-09-28 00:59:58", tz = "UTC"), as.POSIXct("2020-09-29 01:07:07", tz = "UTC"))    
+ind_mo <- which(HOT_POC$date %in% mo_list_date)
+HOT_POC$month[ind_mo] <- HOT_POC$month[ind_mo] + 1
+
+HOT_Clive <- HOT_POC %>%  
     dplyr::group_by(cruise) %>%
     dplyr::summarize(PC = mean(pc, na.rm = TRUE), ATP = mean(atp, na.rm = TRUE), month = mean(month), year = mean(year))
 
@@ -568,7 +577,9 @@ tform_exp <- tform_exp[!is.na(tform_exp$data_day), ]  # Remove lines with short 
 
 r_stats <- tform_exp %>%
     group_by(pop) %>%
-    summarize(r_mean = mean(r), r_sd = sd(r), r_med = median(r), r_IQR = IQR(r), r_25 = quantile(r, probs = c(0.25)), r_75 = quantile(r, probs = c(0.75)))
+    summarize(r_mean = mean(r), r_sd = sd(r), r_med = median(r), r_IQR = IQR(r), 
+              r_25 = quantile(r, probs = c(0.25)), r_75 = quantile(r, probs = c(0.75)),
+              r_min = min(r), r_max = max(r))
 
 r_stats$mean_plus_6sd <- r_stats$r_mean + 6*r_stats$r_sd
 
@@ -580,6 +591,10 @@ tform_exp$rmin <- tform_exp$r - tform_exp$r_se
 
 tform_exp$year <- lubridate::year(tform_exp$date)
 tform_exp$month <- lubridate::month(tform_exp$date)
+# Split double cruises by bumping late month cruises to the next month for KM2011/HOT323
+mo_list_date <- c("2020-09-27", "2020-09-28", "2020-09-29")    
+ind_mo <- which(as.character(tform_exp$date) %in% mo_list_date)
+tform_exp$month[ind_mo] <- tform_exp$month[ind_mo] + 1
 
 fig_name <- paste0(save_path, "HOT_C_specific_growth_daily_sd.pdf")
 pdf(fig_name, width = 15, height = 8)
@@ -614,9 +629,13 @@ HOT_pp$date_start <- dt1_HOT
 HOT_pp$date_end <- dt2_HOT
 
 HOT_pp$l12[which(HOT_pp$l12 == -9)] <- NA
-HOT_pp$month <- lubridate::month(HOT_pp$Date)
 HOT_pp$year <- lubridate::year(HOT_pp$Date)
 HOT_pp$day <- lubridate::yday(HOT_pp$Date)
+HOT_pp$month <- lubridate::month(HOT_pp$Date)
+# Split double cruises by bumping late month cruises to the next month for KM2011/HOT323
+mo_list_date <- c("2020-09-26")   
+ind_mo <- which(as.character(HOT_pp$Date) %in% mo_list_date)
+HOT_pp$month[ind_mo] <- HOT_pp$month[ind_mo] + 1
 
 # C fixation from SeaFlow
 
@@ -630,8 +649,8 @@ sun <- suncalc::getSunlightTimes(date = as.Date(SF_PP$date, tz = "HST"), lat = l
 daylength <- as.double(sun$sunset - sun$sunrise, units = "hours")
 SF_PP$daylength <- daylength
 
-SF_PP$year <- lubridate::year(SF_PP$date) # Need it numeric in this case
-SF_PP$day <- lubridate::yday(SF_PP$date) # Need it numeric in this case
+SF_PP$year <- lubridate::year(SF_PP$date) 
+SF_PP$day <- lubridate::yday(SF_PP$date) 
 SF_PP$PP_exp <- SF_PP$abundance_dawn*(exp(SF_PP$log_Qc0))*(exp(SF_PP$r*SF_PP$daylength) - 1) # Estimate net primary production
 SF_PP$pop <- factor(SF_PP$pop, levels = c('croco', 'euk', 'synecho', 'prochloro'))    # Reverse order to put most numerous on bottom
 
@@ -646,9 +665,6 @@ PP_cruise <- HOT_pp %>%
 SF_cruise <- SF_PP %>%
     group_by(pop, month, year) %>%
     summarize(mean_PP = mean(PP_exp, na.rm = TRUE))
-
-SF_cruise$month <- as.numeric(as.character(SF_cruise$month))
-SF_cruise$year <- as.numeric(as.character(SF_cruise$year))
 
 # Plot biomass and PP together
 # HOT
