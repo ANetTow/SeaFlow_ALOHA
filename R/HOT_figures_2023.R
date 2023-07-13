@@ -5,19 +5,13 @@
 library(tidyverse)
 library(grid)
 library(gridExtra)
-library(gtable)
 library(suncalc)
-library(googlesheets4)
 library(viridis)
 library(latex2exp)
 library(readxl)
-library(ggpubr)
-library(lubridate)
 library(marmap)
 library(oce)
-library(knitr)
 library(broom)
-library(ggh4x)
 library(grDevices)
 #renv::activate("~/Desktop/renvtest/popcycle/")
 library(popcycle)
@@ -44,12 +38,11 @@ aloha <- all_SF %>% dplyr::filter(lat >= 22.25 & lat <= 23.25 & lon <= -157.5 & 
   dplyr::filter(time < as.POSIXct("2021-02-01", tz = "UTC"))
 rm(all_SF)  # clear some memory
 
-
 # Convert from short to long format for easier plotting
-aloha_long <- aloha %>% tidyr::pivot_longer(cols = -c(time, lat, lon, depth, cruise), 
-                                            names_to = c('.value','pop'), 
-                                            names_sep = "_") %>%
-                        arrange(time)
+aloha_long <- aloha %>% 
+	tidyr::pivot_longer(cols = -c(time, lat, lon, depth, cruise), 
+		names_to = c('.value','pop'), names_sep = "_") %>%
+	arrange(time)
 
 # Specific language:  use euk instead of picoeuk
 group.colors <- c(prochloro = viridis::viridis(4)[1],
@@ -57,22 +50,22 @@ group.colors <- c(prochloro = viridis::viridis(4)[1],
                   euk = viridis::viridis(4)[3],
                   croco = viridis::viridis(4)[4])
 
-aloha_long <- aloha_long %>% mutate(pop = case_when(pop == 'picoeuk' ~ 'euk',
-                                                    TRUE ~ pop),
-                                    pop = factor(pop, levels = names(group.colors)),
-                                    Program = "SeaFlow")
+aloha_long <- aloha_long %>% 
+	mutate(pop = case_when(pop == 'picoeuk' ~ 'euk', TRUE ~ pop),
+		pop = factor(pop, levels = names(group.colors)), Program = "SeaFlow")
 
 # Date conversion
-aloha_long <- aloha_long %>% mutate(local_time = as.POSIXct(time, tz = 'HST'),
-                                    year = lubridate::year(local_time),
-                                    month = lubridate::month(local_time),
-                                    yday = lubridate::yday(local_time),
-                                    hour = lubridate::hour(local_time))
+aloha_long <- aloha_long %>% 
+	mutate(local_time = lubridate::with_tz(time, tzone = 'HST'),
+		year = lubridate::year(local_time),
+        month = lubridate::month(local_time),
+        yday = lubridate::yday(local_time),
+        hour = lubridate::hour(local_time))
 
 # Split double cruises by bumping late month cruises to the next month
-aloha_long <- aloha_long %>% mutate(month = case_when(cruise == "KM1709" ~ month + 1,
-                                                      cruise == "KM2011" ~ month + 1,
-                                                      TRUE ~ month))
+aloha_long <- aloha_long %>% 
+	mutate(month = case_when(cruise == "KM1709" ~ month + 1,
+		cruise == "KM2011" ~ month + 1, TRUE ~ month))
 
 ### Calculate daily means ###
 aloha_long_mean <- aloha_long %>%
@@ -83,8 +76,6 @@ aloha_long_mean <- aloha_long %>%
          DateTime = time_mean) %>%
   mutate(date = paste(year, month))
 
-
-
 ##############
 ### Influx ###
 ##############
@@ -92,21 +83,20 @@ influx_file <- '../Data/HOT_influx.csv' # Data from HOT-DOGS
 influx <- read_csv(influx_file, skip = 2, col_types = cols("c","c","c","d","d","d","d","c"))[-1,-c(8)]     # abundances are in 10E5 cells/mL
 
 # Date conversion
-influx <- influx %>% mutate(DateTime = strptime(paste(date,time), format = "%m%d%y %H%M%S", tz = 'HST'),
-                            year = lubridate::year(DateTime),
-                            month = lubridate::month(DateTime),
-                            yday = lubridate::yday(DateTime),
-                            hour = lubridate::hour(DateTime),
-                            date = paste(year, month))
+influx <- influx %>% 
+	mutate(DateTime = strptime(paste(date,time), format = "%m%d%y %H%M%S", tz = 'HST'),
+		year = lubridate::year(DateTime),
+		month = lubridate::month(DateTime),
+		yday = lubridate::yday(DateTime),
+		hour = lubridate::hour(DateTime),
+		date = paste(year, month))
 
 # Convert abundances from 10E5 cells/mL to cells/uL
-post_influx <- influx %>% mutate(pbact = case_when(pbact < 0 ~ NA,
-                                                   TRUE ~ pbact * 100),
-                                 sbact = case_when(sbact < 0 ~ NA,
-                                                   TRUE ~ sbact * 100),
-                                 ebact = case_when(ebact < 0 ~ NA,
-                                                   TRUE ~ ebact * 100)) %>%
-  rename(prochloro = pbact,
+post_influx <- influx %>% 
+	mutate(pbact = case_when(pbact < 0 ~ NA, TRUE ~ pbact * 100),
+		sbact = case_when(sbact < 0 ~ NA, TRUE ~ sbact * 100),
+    	ebact = case_when(ebact < 0 ~ NA, TRUE ~ ebact * 100)) %>%
+    rename(prochloro = pbact,
          synecho = sbact,
          euk = ebact)
 
@@ -114,26 +104,22 @@ post_influx <- influx %>% mutate(pbact = case_when(pbact < 0 ~ NA,
 influx_keep <- post_influx %>% filter(DateTime > lubridate::as_date('2014-12-01'))
 
 # Convert from short to long format for easier plotting
-influx_long <- influx_keep %>% tidyr::pivot_longer(cols = c(prochloro, synecho, euk), 
-                                                   names_to = "pop", 
-                                                   values_to = "abundance") %>%
-  mutate(pop = factor(pop, levels = names(group.colors)),
+influx_long <- influx_keep %>% 
+	tidyr::pivot_longer(cols = c(prochloro, synecho, euk), 
+		names_to = "pop", values_to = "abundance") %>%
+	mutate(pop = factor(pop, levels = names(group.colors)),
          abundance_sd = NA,
          Program = "HOT")
 
 ### Use only the HOT points that have SeaFlow data
 influx_long <- influx_long[influx_long$date %in% unique(aloha_long_mean$date),]
 
-
 ################################
 ### MERGE SeaFlow and Influx ###
 ################################
 all_day <- bind_rows(influx_long %>% select(Program, DateTime, year, month, yday, pop, abundance, abundance_sd), 
-                     aloha_long_mean %>% select(Program, DateTime, year, month, yday, pop, abundance, abundance_sd)) %>%
+	aloha_long_mean %>% select(Program, DateTime, year, month, yday, pop, abundance, abundance_sd)) %>%
   mutate(Program = factor(Program, levels = c("SeaFlow", "HOT")))
-
-
-
 
 
 ###################
@@ -179,8 +165,7 @@ for (phyto in c("prochloro", "synecho", "euk")){
     xlim(0, lim[i]) +
     ylim(0, lim[i]) + 
     theme_bw(base_size = 18) +
-    xlab("") +
-    ylab("") 
+    labs(x = "", y = "", title = phyto)
   
   i <- i + 1
 }
@@ -188,11 +173,10 @@ for (phyto in c("prochloro", "synecho", "euk")){
 fig_name <- "../Figures/HOT_abundance_SF_vs_Influx.pdf"
 pdf(fig_name, width = 12, height = 4)
 fig <- gridExtra::grid.arrange(p[[1]], p[[2]], p[[3]],  
-                               nrow = 1,widths=c(2, 2, 2, 1),
-                               left =  text_grob(unname(latex2exp::TeX('SeaFlow Abundance (10$^6$ cells L$^{-1}$)')), rot = 90), 
-                               bottom = text_grob(unname(latex2exp::TeX('Influx Abundance (10$^6$ cells L$^{-1}$)'))))
+	nrow = 1,widths=c(2, 2, 2, 1),
+    left =  grid::textGrob(unname(latex2exp::TeX('SeaFlow Abundance (10$^6$ cells L$^{-1}$)')), rot = 90), 
+    bottom = grid::textGrob(unname(latex2exp::TeX('Influx Abundance (10$^6$ cells L$^{-1}$)'))))
 dev.off()
-
 
 
 ### Mean + 2 sd to define bloom ###
@@ -247,10 +231,9 @@ all_aloha_hr <-  aloha_long %>%
   arrange(time)
 
 # Split double cruises by bumping late month cruises to the next month
-all_aloha_hr <- all_aloha_hr %>% mutate(month = case_when(cruise == "KM1709" ~ month + 1,
-                                                      cruise == "KM2011" ~ month + 1,
-                                                      TRUE ~ month),
-                                        month = stringr::str_pad(month, 2, side = "left", pad = 0))
+all_aloha_hr <- all_aloha_hr %>% 
+	mutate(month = case_when(cruise == "KM1709" ~ month + 1, cruise == "KM2011" ~ month + 1, TRUE ~ month), 
+		month = stringr::str_pad(month, 2, side = "left", pad = 0))
                     
 ### Curation
 cruise_cut <- c('KOK1606', 'MGL1704', 'KM1906')   # These cruises pass through Station aloha so quickly, they are not helpful for diel patterns
@@ -262,7 +245,6 @@ all_aloha_hr_no_outlier$year <- as.factor(all_aloha_hr_no_outlier$year)
 
 # Remove low abundance points first.
 all_aloha_hr_robust <- subset(all_aloha_hr_no_outlier, abundance > 0.02) # 0.048 = About 30 cells per 3-min file
-
 
 
 ### Plot  DIAMETER and QC during time of day
@@ -285,11 +267,11 @@ med_diam <- all_aloha_hr_robust %>%
 g1 <- all_aloha_hr_robust %>%
     ggplot(aes(x = sunhour, y = diam, group = sundate)) +
     geom_rect(aes(xmin = 12, xmax = 24, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
-    geom_line(alpha = 0.25, color = prog.colors['SeaFlow'], size = 2) +
+    geom_line(alpha = 0.25, color = prog.colors['SeaFlow'], linewidth = 2) +
     theme_bw(base_size = 20) +
     scale_y_continuous(sec.axis = sec_axis(~ coef*.^expo, labels = NULL)) +
     facet_wrap(vars(pop), ncol = 1, scales = 'free_y') +
-    geom_text(aes(label = paste0('n = ', n_days), x = -Inf, y = Inf), hjust = 0, vjust = 1.5, check_overlap = T, size = 6) +
+    geom_text(aes(label = paste0(' n = ', n_days), x = -Inf, y = Inf), hjust = 0, vjust = 1.5, check_overlap = T, size = 6) +
     ggplot2::labs(y = unname(latex2exp::TeX('Diameter ($\\mu$m)')), x = 'Hours since Dawn')
 
 g2 <- all_aloha_hr_robust %>%
@@ -304,12 +286,8 @@ g2 <- all_aloha_hr_robust %>%
 
 fig_name <- '../Figures/HOT_diameter_Qc_summary.pdf'
 pdf(fig_name, width = 8, height = 12)
-    grid.arrange(g1, g2, ncol = 2)
+    gridExtra::grid.arrange(g1, g2, ncol = 2)
 dev.off()
-
-
-
-
 
 
 ###################
@@ -318,9 +296,9 @@ dev.off()
 
 # Rain results
 
-rain_file1 <- '../Data/HOT_rain_results_2021_12_25.csv'  # peaks (relevant for Qc)
+rain_file1 <- '../Data/HOT_rain_results_2023_06_20_peaks.csv'  # peaks (relevant for Qc)
 big_rain_peak <- read.csv(rain_file1)
-rain_file2 <- '../Data/HOT_rain_results_2022_01_03_troughs.csv'   # troughs (relevant for abundance)
+rain_file2 <- '../Data/HOT_rain_results_2023_07_10_troughs.csv'   # troughs (relevant for abundance)
 big_rain_trough <- read.csv(rain_file2)
 
 big_rain <- rbind(subset(big_rain_peak, param == 'Qc'), subset(big_rain_trough, param == 'abundance'))
@@ -333,8 +311,6 @@ big_rain$periodic <- sig
 big_rain$pop <- gsub("picoeuk", 'euk', big_rain$pop)
 big_rain$pop <- factor(big_rain$pop, levels = names(group.colors))
 
-cruise_cut <- c('HOT317', 'KOK1606', 'KOK1608', 'MGL1704', 'KM1906', 'KOK1515')   # These cruises either have some outlier values or pass through Station aloha so quickly, they are not helpful for diel patterns
-big_rain <- subset(big_rain, !(cruise %in% cruise_cut))
 
 # Group into 2-hour blocks
 TOD_2 <- cut(big_rain$peak_hour, breaks = c(-0.5, 1.5, 3.5, 5.5, 7.5, 9.5, 11.5, 13.5, 15.5, 17.5, 19.5, 21.5, 23.5),
@@ -356,7 +332,7 @@ pdf(fig_name, width = 8, height = 10)
 g <- ggplot2::ggplot(rain_trough, aes(TOD_2, fill = TOD_2)) +
     geom_rect(aes(xmin = -Inf, xmax = 4.5, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
     geom_rect(aes(xmin = 11, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
-    ggplot2::geom_bar(aes(y = (..count..)/n.cruise), alpha = 1, colour = 'black', fill = 'white', show.legend = FALSE) +
+    ggplot2::geom_bar(aes(y = after_stat(count)/n.cruise), alpha = 1, colour = 'black', fill = 'white', show.legend = FALSE) +
     ggplot2::theme_bw(base_size = 22) +
     #ggplot2::scale_fill_manual(values = day_colors) +
     ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23')) +
@@ -371,16 +347,13 @@ dev.off()
 rain_peak <- subset(big_rain, param == "Qc")
 n.cruise <- length(unique(rain_peak$cruise))
 
-rain_peak$TOD_2 <- factor(rain_peak$TOD_2, levels = c('Aperiodic', '00:00 - 01:59', '02:00 - 03:59', '04:00 - 05:59', '06:00 - 07:59', '08:00 - 09:59', '10:00 - 11:59', '12:00 - 13:59', '14:00 - 15:59', '16:00 - 17:59', '18:00 - 19:59', '20:00 - 21:59', '22:00 - 23:59'))
-
 fig_name <- "../Figures/HOT_rain_Qc_bar_2hr_nocolor.pdf"
 pdf(fig_name, width = 8, height = 10)
 g <- ggplot2::ggplot(rain_peak, aes(TOD_2, fill = TOD_2)) +
     geom_rect(aes(xmin = -Inf, xmax = 4.5, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
     geom_rect(aes(xmin = 11, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
-    ggplot2::geom_bar(aes(y = (..count..)/n.cruise), alpha = 1, colour = 'black', fill = 'white', show.legend = FALSE) +
+    ggplot2::geom_bar(aes(y = after_stat(count)/n.cruise), alpha = 1, colour = 'black', fill = 'white', show.legend = FALSE) +
     ggplot2::theme_bw(base_size = 22) +
-    #ggplot2::scale_fill_manual(values = day_colors, name = "Time of Day (HST)", drop = FALSE) +
     ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23'), drop = FALSE) +
     ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1L)) +
     ggplot2::facet_wrap(vars(pop), ncol = 1) +
@@ -388,9 +361,6 @@ g <- ggplot2::ggplot(rain_peak, aes(TOD_2, fill = TOD_2)) +
     ggplot2::labs(x = 'Carbon Quota Maxima Hour (HST)', y = 'Percent of Cruises')
 print(g)
 dev.off()
-
-
-
 
 
 
@@ -432,10 +402,12 @@ HOT_Clive$pc_live_250 <- (HOT_Clive$ATP*250/HOT_Clive$PC)/(12.01*10^3)  # percen
 HOT_Clive$pc_live_400 <- HOT_Clive$ATP*400/HOT_Clive$PC/(12.01*10^3)
 HOT_Clive$pc_live_150 <- (HOT_Clive$ATP*150/HOT_Clive$PC)/(12.01*10^3) 
 
-umolpkg2ugpL <- 12.01*1036/(10^3)   # Convert umol C/kg to ug C/L.
-HOT_Clive$C_live_150 <- HOT_Clive$PC*umolpkg2ugpL*HOT_Clive$pc_live_150
-HOT_Clive$C_live_250 <- HOT_Clive$PC*umolpkg2ugpL*HOT_Clive$pc_live_250
-HOT_Clive$C_live_400 <- HOT_Clive$PC*umolpkg2ugpL*HOT_Clive$pc_live_400
+umolpkg2ugpL <- 12.01*1024/(10^3)   # Convert umol C/kg to ug C/L using seawater density at Station ALOHA.
+HOT_Clive$PC_ugpL <- HOT_Clive$PC*umolpkg2ugpL
+HOT_Clive$C_live_150 <- HOT_Clive$PC_ugpL*HOT_Clive$pc_live_150
+HOT_Clive$C_live_250 <- HOT_Clive$PC_ugpL*HOT_Clive$pc_live_250
+HOT_Clive$C_live_400 <- HOT_Clive$PC_ugpL*HOT_Clive$pc_live_400
+
 HOT_Clive <- na.omit(HOT_Clive)
 
 # Compare per-cruise biomass estimates between methods
@@ -546,7 +518,7 @@ g <- ggplot2::ggplot(tform_exp, aes(x = year, y = r)) +
     ggplot2::theme_bw(base_size = 18) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
     ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-    ggplot2::labs(y = unname(latex2exp::TeX('Net scatter-based specific growth rate (hr$^{-1}$)')), x = 'Year')
+    ggplot2::labs(y = unname(latex2exp::TeX('Net scatter-based specific growth rate (h$^{-1}$)')), x = 'Year')
 print(g)
 dev.off()
 
@@ -647,8 +619,8 @@ p <- ggplot2::ggplot(C_SF, aes(x = year)) +
     ggplot2::theme_bw(base_size = 18) +
     ggplot2::scale_fill_manual(values = group.colors) +
     ggplot2::guides(fill = ggplot2::guide_legend(title = "population")) +
-    ggplot2::geom_point(data = C_HOT_incl, aes(y = value, color = 'HOT'), fill = 'white', pch = 21, size = 3, alpha = 1) +
     ggplot2::geom_linerange(data = C_HOT_incl, aes(x = year, ymin = min, ymax = max, color = 'HOT')) +
+    ggplot2::geom_point(data = C_HOT_incl, aes(y = value, color = 'HOT'), fill = 'white', pch = 21, size = 3, alpha = 1) +
     ggplot2::scale_color_manual(name = "", values = c("HOT" = "black")) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
     ggplot2::facet_grid(cols = vars(month), rows = vars(param), scales = 'free_y') +
@@ -704,6 +676,6 @@ g2 <- ggplot(croco_Nfix) +
   theme_bw(base_size = 18)
 
 png(file = "../Figures/Croco_N2_fix_support_C.png", width = 6000, height = 3200, res = 300)
-t <- textGrob("Crocosphaera carbon supported by N2 fixation", gp = gpar(fontsize = 18))
+t <- grid::textGrob("Crocosphaera carbon supported by N2 fixation", gp = gpar(fontsize = 18))
 grid.arrange(g1, g2, ncol = 2, top = t)
 dev.off()
