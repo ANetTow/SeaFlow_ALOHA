@@ -296,21 +296,21 @@ dev.off()
 
 # Rain results
 
-rain_file1 <- '../Data/HOT_rain_results_2023_06_20_peaks.csv'  # peaks (relevant for Qc)
+rain_file1 <- '../Data/HOT_rain_results_2023_07_14_peaks.csv'  # peaks (relevant for Qc)
 big_rain_peak <- read.csv(rain_file1)
+
 rain_file2 <- '../Data/HOT_rain_results_2023_07_10_troughs.csv'   # troughs (relevant for abundance)
 big_rain_trough <- read.csv(rain_file2)
-
-big_rain <- rbind(subset(big_rain_peak, param == 'Qc'), subset(big_rain_trough, param == 'abundance'))
-
-t <- as.POSIXct(big_rain$first_peak, format = '%Y-%m-%d %H:%M:%S', tz = "HST")
+t <- as.POSIXct(big_rain_trough$first_peak, format = '%Y-%m-%d %H:%M:%S', tz = "HST")
 pk_hr <- lubridate::hour(t)
-big_rain$peak_hour <- pk_hr
+big_rain_trough$peak_hour <- pk_hr
+
+big_rain <- rbind(big_rain_peak, big_rain_trough)
+
 sig <- big_rain$pVal <= 0.05    # Significant p-values--are they periodic or not?
 big_rain$periodic <- sig
 big_rain$pop <- gsub("picoeuk", 'euk', big_rain$pop)
 big_rain$pop <- factor(big_rain$pop, levels = names(group.colors))
-
 
 # Group into 2-hour blocks
 TOD_2 <- cut(big_rain$peak_hour, breaks = c(-0.5, 1.5, 3.5, 5.5, 7.5, 9.5, 11.5, 13.5, 15.5, 17.5, 19.5, 21.5, 23.5),
@@ -361,8 +361,6 @@ g <- ggplot2::ggplot(rain_peak, aes(TOD_2, fill = TOD_2)) +
     ggplot2::labs(x = 'Carbon Quota Maxima Hour (HST)', y = 'Percent of Cruises')
 print(g)
 dev.off()
-
-
 
 
 ###############
