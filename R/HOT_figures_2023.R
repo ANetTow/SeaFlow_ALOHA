@@ -462,7 +462,6 @@ aloha_lm_day <- all_aloha_light %>%
     dplyr::group_by(date, pop) %>%
     tidyr::nest() %>%
     dplyr::mutate(
-        #model = purrr::map(data, ~lm(Qc ~ hour, data = .)),
         model = purrr::map(data, ~lm(log(Qc) ~ sunhour, data = .)),
         tidied = purrr::map(model, broom::tidy)
     ) %>%
@@ -493,9 +492,6 @@ r_stats <- tform_exp %>%
               r_min = min(r), r_max = max(r))
 
 r_stats$mean_plus_6sd <- r_stats$r_mean + 6*r_stats$r_sd
-
-tform_exp$r[which(tform_exp$r > 0.3)] <- NA   # Remove exceptionally high rates
-tform_exp <- tform_exp[!is.na(tform_exp$r), ]
 
 tform_exp$rmax <- tform_exp$r + tform_exp$r_se
 tform_exp$rmin <- tform_exp$r - tform_exp$r_se
@@ -676,4 +672,108 @@ g2 <- ggplot(croco_Nfix) +
 png(file = "../Figures/Croco_N2_fix_support_C.png", width = 6000, height = 3200, res = 300)
 t <- grid::textGrob("Crocosphaera carbon supported by N2 fixation", gp = gpar(fontsize = 18))
 grid.arrange(g1, g2, ncol = 2, top = t)
+dev.off()
+
+###################
+### VARIABILITY ###
+###################
+
+### Abundance ###
+
+data_h <- aloha_long %>% 
+  dplyr::group_by(pop, time = cut(time, "1 hour")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution = "hourly")
+
+data_d <- aloha_long %>% 
+  dplyr::group_by(pop, time = cut(time, "1 day")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution = "daily")
+
+data_m <- aloha_long %>% 
+  dplyr::group_by(pop, time = cut(time, "1 month")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution  = "monthly")
+
+data_s <- aloha_long %>% 
+  dplyr::group_by(pop, time = cut(time, "3 months")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution = "seasonal")
+
+data_y <- aloha_long %>% 
+  dplyr::group_by(pop, time = cut(time, "1 year")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution = "annual")
+
+data_variance <- bind_rows(data_h, data_d, data_m, data_s, data_y) %>%
+  mutate(resolution = factor(resolution, levels = c("hourly","daily","monthly","seasonal","annual")),
+         pop = factor(pop, levels = c("prochloro","synecho","euk","croco")))
+
+
+p <- data_variance %>% 
+  ggplot(aes(resolution, var)) +
+  geom_boxplot(position = "dodge", alpha = 0.5, fill = "darkgrey", outlier.shape = NA) + 
+  ylab(" Fold change in cell abundance") +
+  scale_y_continuous(limits = c(0, 2)) +
+  xlab("") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  facet_grid( pop ~ .)
+
+print(p)
+
+png(paste0("../Figures/Variability.png"), width = 1000, height = 2000, res = 300)
+print(p)
+dev.off()
+
+### Specific Growth ###
+
+data_d <- tform_exp %>% 
+  dplyr::group_by(pop, date = cut(date, "1 day")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution = "daily")
+
+data_m <- tform_exp %>% 
+  dplyr::group_by(pop, date = cut(date, "1 month")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution  = "monthly")
+
+data_s <- tform_exp %>% 
+  dplyr::group_by(pop, date = cut(date, "3 months")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution = "seasonal")
+
+data_y <- tform_exp %>% 
+  dplyr::group_by(pop, date = cut(date, "1 year")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution = "annual")
+
+data_variance <- bind_rows(data_d, data_m, data_s, data_y) %>%
+  mutate(resolution = factor(resolution, levels = c("daily", "monthly","seasonal","annual")),
+         pop = factor(pop, levels = c("prochloro","synecho","euk","croco")))
+
+
+p2 <- data_variance %>% 
+  ggplot(aes(resolution, var)) +
+  geom_boxplot(position = "dodge", alpha = 0.5, fill = "darkgrey", outlier.shape = NA) + 
+  ylab(" Fold change in specific growth") +
+  scale_y_continuous(limits = c(0, 1.1)) +
+  xlab("") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  facet_grid( pop ~ .)
+
+print(p2)
+
+png(paste0("../Figures/Variability_growth.png"), width = 1000, height = 2000, res = 300)
+print(p2)
 dev.off()
