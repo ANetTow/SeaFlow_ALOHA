@@ -503,7 +503,7 @@ mo_list_date <- c("2020-09-27", "2020-09-28", "2020-09-29")
 ind_mo <- which(as.character(tform_exp$date) %in% mo_list_date)
 tform_exp$month[ind_mo] <- tform_exp$month[ind_mo] + 1
 
-fig_name <- "../Figures/HOT_C_specific_growth_daily_sd.pdf"
+fig_name <- "../figures/HOT_C_specific_growth_daily_sd.pdf"
 pdf(fig_name, width = 15, height = 8)
 g <- ggplot2::ggplot(tform_exp, aes(x = year, y = r)) +
     ggplot2::geom_linerange(ggplot2::aes(x = year, ymin = rmin, ymax = rmax), color = prog.colors[1]) +
@@ -733,6 +733,12 @@ dev.off()
 
 ### Specific Growth ###
 
+data_d <- tform_exp %>% 
+  dplyr::group_by(pop, date = cut(date, "1 day")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::mutate(resolution = "daily")
+
 data_m <- tform_exp %>% 
   dplyr::group_by(pop, date = cut(date, "1 month")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
@@ -751,8 +757,8 @@ data_y <- tform_exp %>%
   dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
   dplyr::mutate(resolution = "annual")
 
-data_variance <- bind_rows(data_m, data_s, data_y) %>%
-  mutate(resolution = factor(resolution, levels = c("monthly","seasonal","annual")),
+data_variance <- bind_rows(data_d, data_m, data_s, data_y) %>%
+  mutate(resolution = factor(resolution, levels = c("daily", "monthly","seasonal","annual")),
          pop = factor(pop, levels = c("prochloro","synecho","euk","croco")))
 
 
