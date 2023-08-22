@@ -1,7 +1,7 @@
 # HOT_figures puts together final figures of the Station aloha SeaFlow data for publication. 
 #
 # Started: 25/May/2023  Annette Hynes, UW
-
+ 
 library(tidyverse)
 library(grid)
 library(gridExtra)
@@ -19,6 +19,8 @@ library(popcycle)
 ###############
 ### SeaFlow ###
 ###############
+
+setwd("/R")
 
 # Download SeaFlow data from Zenodo (doi.org/10.5281/zenodo.7154076)
 url <- "https://zenodo.org/record/7154076/files/SeaFlow_dataset_v1.5.xlsx" 
@@ -40,9 +42,9 @@ rm(all_SF)  # clear some memory
 
 # Convert from short to long format for easier plotting
 aloha_long <- aloha %>% 
-	tidyr::pivot_longer(cols = -c(time, lat, lon, depth, cruise), 
-		names_to = c('.value','pop'), names_sep = "_") %>%
-	arrange(time)
+  tidyr::pivot_longer(cols = -c(time, lat, lon, depth, cruise), 
+    names_to = c('.value','pop'), names_sep = "_") %>%
+  arrange(time)
 
 # Specific language:  use euk instead of picoeuk
 group.colors <- c(prochloro = viridis::viridis(4)[1],
@@ -51,21 +53,21 @@ group.colors <- c(prochloro = viridis::viridis(4)[1],
                   croco = viridis::viridis(4)[4])
 
 aloha_long <- aloha_long %>% 
-	mutate(pop = case_when(pop == 'picoeuk' ~ 'euk', TRUE ~ pop),
-		pop = factor(pop, levels = names(group.colors)), Program = "SeaFlow")
+  mutate(pop = case_when(pop == 'picoeuk' ~ 'euk', TRUE ~ pop),
+         pop = factor(pop, levels = names(group.colors)), Program = "SeaFlow")
 
-# Date conversion
+# Local time
 aloha_long <- aloha_long %>% 
-	mutate(local_time = lubridate::with_tz(time, tzone = 'HST'),
-		year = lubridate::year(local_time),
-        month = lubridate::month(local_time),
-        yday = lubridate::yday(local_time),
-        hour = lubridate::hour(local_time))
+  mutate(local_time = lubridate::with_tz(time, tzone = 'HST'),
+         year = lubridate::year(local_time),
+         month = lubridate::month(local_time),
+         yday = lubridate::yday(local_time),
+         hour = lubridate::hour(local_time))
 
 # Split double cruises by bumping late month cruises to the next month
 aloha_long <- aloha_long %>% 
-	mutate(month = case_when(cruise == "KM1709" ~ month + 1,
-		cruise == "KM2011" ~ month + 1, TRUE ~ month))
+  mutate(month = case_when(cruise == "KM1709" ~ month + 1,
+                           cruise == "KM2011" ~ month + 1, TRUE ~ month))
 
 ### Calculate daily means ###
 aloha_long_mean <- aloha_long %>%
@@ -296,20 +298,11 @@ dev.off()
 
 # Rain results
 
-rain_file1 <- '../Data/HOT_rain_results_2023_07_14_peaks.csv'  # peaks (relevant for Qc)
-big_rain_peak <- read.csv(rain_file1)
-
-rain_file2 <- '../Data/HOT_rain_results_2023_07_10_troughs.csv'   # troughs (relevant for abundance)
-big_rain_trough <- read.csv(rain_file2)
-t <- as.POSIXct(big_rain_trough$first_peak, format = '%Y-%m-%d %H:%M:%S', tz = "HST")
-pk_hr <- lubridate::hour(t)
-big_rain_trough$peak_hour <- pk_hr
-
-big_rain <- rbind(big_rain_peak, big_rain_trough)
+rain_file <- '../Data/HOT_rain_results_2023_08_14.csv'  # peaks (relevant for Qc)
+big_rain <- read.csv(rain_file)
 
 sig <- big_rain$pVal <= 0.05    # Significant p-values--are they periodic or not?
 big_rain$periodic <- sig
-big_rain$pop <- gsub("picoeuk", 'euk', big_rain$pop)
 big_rain$pop <- factor(big_rain$pop, levels = names(group.colors))
 
 # Group into 2-hour blocks
@@ -331,11 +324,10 @@ fig_name <- "../Figures/HOT_rain_abundance_bar_2hr_nocolor.pdf"
 pdf(fig_name, width = 8, height = 10)
 g <- ggplot2::ggplot(rain_trough, aes(TOD_2, fill = TOD_2)) +
     geom_rect(aes(xmin = -Inf, xmax = 4.5, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
-    geom_rect(aes(xmin = 11, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
+    geom_rect(aes(xmin = 10.5, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
     ggplot2::geom_bar(aes(y = after_stat(count)/n.cruise), alpha = 1, colour = 'black', fill = 'white', show.legend = FALSE) +
     ggplot2::theme_bw(base_size = 22) +
-    #ggplot2::scale_fill_manual(values = day_colors) +
-    ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23')) +
+     ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23')) +
     ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1L)) +
     ggplot2::facet_wrap(vars(pop), ncol = 1) +
     ggpubr::rotate_x_text() +
@@ -351,7 +343,7 @@ fig_name <- "../Figures/HOT_rain_Qc_bar_2hr_nocolor.pdf"
 pdf(fig_name, width = 8, height = 10)
 g <- ggplot2::ggplot(rain_peak, aes(TOD_2, fill = TOD_2)) +
     geom_rect(aes(xmin = -Inf, xmax = 4.5, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
-    geom_rect(aes(xmin = 11, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
+    geom_rect(aes(xmin = 10.5, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
     ggplot2::geom_bar(aes(y = after_stat(count)/n.cruise), alpha = 1, colour = 'black', fill = 'white', show.legend = FALSE) +
     ggplot2::theme_bw(base_size = 22) +
     ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23'), drop = FALSE) +
@@ -421,7 +413,8 @@ total_aloha_cruise <- all_aloha_cruise %>%
     summarize(total_biomass = sum(mean_biomass, na.rm = TRUE))
 
 PC_all <- merge(HOT_Clive, total_aloha_cruise, by = c('month', 'year'))
-PC_all$SF2PC <- PC_all$total_biomass/PC_all$C_live_250
+PC_all$SF2PC_tot <- PC_all$total_biomass/PC_all$PC_ugpL
+PC_all$SF2PC_live <- PC_all$total_biomass/PC_all$C_live_250
 PC_all$bloom <- FALSE
 ind_b1 <- which(PC_all$month == 7 & PC_all$year == 2016)	# Eukaryote blooms: July 2016, Aug 2016, Aug 2017, Aug 2019
 ind_b2 <- which(PC_all$month == 8 & PC_all$year == 2016)
@@ -432,9 +425,8 @@ PC_all$bloom[ind_bloom] <- TRUE
 
 SF2PC <- PC_all %>%
 	dplyr::group_by(bloom) %>%
-	dplyr::summarize(SF2PC_mean = mean(SF2PC), SF2PC_sd = sd(SF2PC), SF2PC_min = min(SF2PC), SF2PC_max = max(SF2PC))
-
-
+	dplyr::summarize(live_mean = mean(SF2PC_live), live_sd = sd(SF2PC_live), live_min = min(SF2PC_live), live_max = max(SF2PC_live),
+	                 tot_mean = mean(SF2PC_tot), tot_sd = sd(SF2PC_tot), tot_min = min(SF2PC_tot), tot_max = max(SF2PC_tot))
 
 
 #########################
@@ -512,7 +504,7 @@ g <- ggplot2::ggplot(tform_exp, aes(x = year, y = r)) +
     ggplot2::theme_bw(base_size = 18) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
     ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-    ggplot2::labs(y = unname(latex2exp::TeX('Net scatter-based specific growth rate (h$^{-1}$)')), x = 'Year')
+    ggplot2::labs(y = unname(latex2exp::TeX('Net scatter-based cellular growth rate (h$^{-1}$)')), x = 'Year')
 print(g)
 dev.off()
 
@@ -678,102 +670,168 @@ dev.off()
 ### VARIABILITY ###
 ###################
 
-### Abundance ###
+### Abundance using lag ###
 
 data_h <- aloha_long %>% 
-  dplyr::group_by(pop, time = cut(time, "1 hour")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(time, unit = "hours")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE)), gap = as.numeric(diff(time))) %>%
   dplyr::mutate(resolution = "hourly")
+data_h <- dplyr::filter(data_h, gap < 5)   # exclude gaps >= 5 hours
 
 data_d <- aloha_long %>% 
-  dplyr::group_by(pop, time = cut(time, "1 day")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(time, unit = "days")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE)), gap = as.numeric(diff(time))) %>%
   dplyr::mutate(resolution = "daily")
+data_d <- dplyr::filter(data_d, gap < 3)  # exclude gaps >= 3 days
 
 data_m <- aloha_long %>% 
-  dplyr::group_by(pop, time = cut(time, "1 month")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(time, "months")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE)), gap = as.numeric(diff(time))) %>%
   dplyr::mutate(resolution  = "monthly")
+data_m <- dplyr::filter(data_m, gap < 45)  # exclude gaps >= 45 days
 
 data_s <- aloha_long %>% 
-  dplyr::group_by(pop, time = cut(time, "3 months")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(time, "3 months")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE)), gap = as.numeric(diff(time))) %>%
   dplyr::mutate(resolution = "seasonal")
+data_s <- dplyr::filter(data_s, gap < 100)  # exclude gaps >= 100 days
 
 data_y <- aloha_long %>% 
-  dplyr::group_by(pop, time = cut(time, "1 year")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(time, "years")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE)), gap = as.numeric(diff(time))) %>%
   dplyr::mutate(resolution = "annual")
 
 data_variance <- bind_rows(data_h, data_d, data_m, data_s, data_y) %>%
   mutate(resolution = factor(resolution, levels = c("hourly","daily","monthly","seasonal","annual")),
          pop = factor(pop, levels = c("prochloro","synecho","euk","croco")))
 
+ta <- data.frame(x = "hourly", y = 1.25, pop = factor("prochloro", levels = c("prochloro","synecho","euk","croco")), label = "a") # label
 
-p <- data_variance %>% 
+p1 <- data_variance %>% 
   ggplot(aes(resolution, var)) +
   geom_boxplot(position = "dodge", alpha = 0.5, fill = "darkgrey", outlier.shape = NA) + 
   ylab(" Fold change in cell abundance") +
-  scale_y_continuous(limits = c(0, 2)) +
+  scale_y_continuous(limits = c(0, 1.5)) +
   xlab("") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 90)) +
-  facet_grid( pop ~ .)
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  facet_grid( pop ~ .) #+
+  #geom_text(data = ta, aes(x = x, y = y, label = label))
+print(p1)
 
-print(p)
-
-png(paste0("../Figures/Variability.png"), width = 1000, height = 2000, res = 300)
-print(p)
+png(paste0("../Figures/Variability_gap.png"), width = 1000, height = 2000, res = 300)
+print(p1)
 dev.off()
+
+### statistical test 
+
+# Test normality using Shapiro-Wilk
+var_norm <- data_variance %>%
+  group_by(pop, resolution) %>%
+  do(tidy(shapiro.test(.$var)))
+# Not normal:  Pro-seasonal, euk-annual, croco-annual
+
+pop_list <- unique(var_norm$pop)
+
+# Multiple comparisons:  Kruskall-Wallis test, then pairwise Dunn rank sum test (and Wilcoxon for comparison though Dunn is considered more appropriate)
+
+for(phyto in pop_list){
+  print(phyto)
+  this_pop <- subset(data_variance, pop == phyto)
+  KW <- kruskal.test(x = this_pop$var, g = this_pop$resolution)
+  print(KW)
+  print(KW$p.value)
+  if(KW$p.value < 0.01){
+    PW <- pairwise.wilcox.test(x = this_pop$var, g = this_pop$resolution, p.adjust.method = "BH")
+    print(PW)
+    D <- dunn.test::dunn.test(x = this_pop$var, g = this_pop$resolution, method = "bh", alpha = .01)
+    print(D)
+  }
+}
+
 
 ### Specific Growth ###
 
 data_d <- tform_exp %>% 
-  dplyr::group_by(pop, date = cut(date, "1 day")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(date, unit = "days")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(n)/mean(n, na.rm = TRUE)), gap = as.numeric(diff(date))) %>%
   dplyr::mutate(resolution = "daily")
+data_d <- dplyr::filter(data_d, gap < 3)  # exclude gaps >= 3 days
 
 data_m <- tform_exp %>% 
-  dplyr::group_by(pop, date = cut(date, "1 month")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(date, "months")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(n)/mean(n, na.rm = TRUE)), gap = as.numeric(diff(date))) %>%
   dplyr::mutate(resolution  = "monthly")
+data_m <- dplyr::filter(data_m, gap < 45)  # exclude gaps >= 45 days
 
 data_s <- tform_exp %>% 
-  dplyr::group_by(pop, date = cut(date, "3 months")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(date, "3 months")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(n)/mean(n, na.rm = TRUE)), gap = as.numeric(diff(date))) %>%
   dplyr::mutate(resolution = "seasonal")
+data_s <- dplyr::filter(data_s, gap < 100)  # exclude gaps >= 100 days
 
 data_y <- tform_exp %>% 
-  dplyr::group_by(pop, date = cut(date, "1 year")) %>%
+  dplyr::group_by(pop, time = lubridate::floor_date(date, "years")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(r)/mean(r, na.rm = TRUE))) %>%
+  dplyr::summarize(var = abs(diff(n)/mean(n, na.rm = TRUE)), gap = as.numeric(diff(date))) %>%
   dplyr::mutate(resolution = "annual")
 
 data_variance <- bind_rows(data_d, data_m, data_s, data_y) %>%
-  mutate(resolution = factor(resolution, levels = c("daily", "monthly","seasonal","annual")),
+  mutate(resolution = factor(resolution, levels = c("daily","monthly","seasonal","annual")),
          pop = factor(pop, levels = c("prochloro","synecho","euk","croco")))
 
+tb <- data.frame(x = factor("daily", levels = c("daily","monthly","seasonal","annual")), 
+  y = 0.6, pop = factor("prochloro", levels = c("prochloro","synecho","euk","croco")), label = "b") # label
 
 p2 <- data_variance %>% 
   ggplot(aes(resolution, var)) +
   geom_boxplot(position = "dodge", alpha = 0.5, fill = "darkgrey", outlier.shape = NA) + 
-  ylab(" Fold change in specific growth") +
-  scale_y_continuous(limits = c(0, 1.1)) +
+  ylab(" Fold change in cellular growth rate") +
+  scale_y_continuous(limits = c(0, 0.75)) +
   xlab("") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 90)) +
-  facet_grid( pop ~ .)
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  facet_grid( pop ~ .) #+
+  #geom_text(data = tb, aes(x = x, y = y, label = label))
 
 print(p2)
 
-png(paste0("../Figures/Variability_growth.png"), width = 1000, height = 2000, res = 300)
+png(paste0("../Figures/Variability_growth_gap.png"), width = 1000, height = 2000, res = 300)
 print(p2)
 dev.off()
+
+### statistical test 
+
+# Test normality using Shapiro-Wilk
+var_norm <- data_variance %>%
+  group_by(pop, resolution) %>%
+  do(tidy(shapiro.test(.$var)))
+# Not normal:  Error
+
+pop_list <- unique(data_variance$pop)
+
+# Multiple comparisons:  Kruskall-Wallis test
+
+for(phyto in pop_list){
+  print(phyto)
+  this_pop <- subset(data_variance, pop == phyto)
+  KW <- kruskal.test(x = this_pop$var, g = this_pop$resolution)
+  print(KW)
+  print(KW$p.value)
+ # if(KW$p.value < 0.01){
+    PW <- pairwise.wilcox.test(x = this_pop$var, g = this_pop$resolution, p.adjust.method = "BH")
+    print(PW)
+    D <- dunn.test::dunn.test(x = this_pop$var, g = this_pop$resolution, method = "bh", alpha = .01)
+    print(D)
+  #}
+}
+
+# No significant differences among distributions
