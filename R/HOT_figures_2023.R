@@ -3,8 +3,10 @@
 # Started: 25/May/2023  Annette Hynes, UW
  
 library(tidyverse)
+library(popcycle)
 library(grid)
 library(gridExtra)
+library(ggpubr)
 library(suncalc)
 library(viridis)
 library(latex2exp)
@@ -13,8 +15,7 @@ library(marmap)
 library(oce)
 library(broom)
 library(grDevices)
-#renv::activate("~/Desktop/renvtest/popcycle/")
-library(popcycle)
+library(dunn.test)
 
 ###############
 ### SeaFlow ###
@@ -25,8 +26,7 @@ setwd("/R")
 # Download SeaFlow data from Zenodo (doi.org/10.5281/zenodo.7154076)
 url <- "https://zenodo.org/record/7154076/files/SeaFlow_dataset_v1.5.xlsx" 
 file_name <- tempfile()
-try(download.file(url,file_name,method="curl"))
-if (is.na(file.size(file_name))) download.file(url, file_name,method="auto")
+try(download.file(url, file_name, method = "auto"))
 
 # Read SeaFlow data
 all_SF <- readxl::read_xlsx(file_name) %>%
@@ -51,6 +51,9 @@ group.colors <- c(prochloro = viridis::viridis(4)[1],
                   synecho = viridis::viridis(4)[2], 
                   euk = viridis::viridis(4)[3],
                   croco = viridis::viridis(4)[4])
+
+pop.labels <- c("Prochlorococcus", "Synechococcus", "Small eukaryotes", "Crocosphaera")
+names(pop.labels) <- c("prochloro", "synecho", "euk", "croco")
 
 aloha_long <- aloha_long %>% 
   mutate(pop = case_when(pop == 'picoeuk' ~ 'euk', TRUE ~ pop),
@@ -97,21 +100,18 @@ influx <- influx %>%
 post_influx <- influx %>% 
 	mutate(pbact = case_when(pbact < 0 ~ NA, TRUE ~ pbact * 100),
 		sbact = case_when(sbact < 0 ~ NA, TRUE ~ sbact * 100),
-    	ebact = case_when(ebact < 0 ~ NA, TRUE ~ ebact * 100)) %>%
-    rename(prochloro = pbact,
-         synecho = sbact,
-         euk = ebact)
+    ebact = case_when(ebact < 0 ~ NA, TRUE ~ ebact * 100)) %>%
+  rename(prochloro = pbact, synecho = sbact, euk = ebact)
 
 # Only keep influx data after SeaFlow started (December, 2014)
 influx_keep <- post_influx %>% filter(DateTime > lubridate::as_date('2014-12-01'))
 
 # Convert from short to long format for easier plotting
 influx_long <- influx_keep %>% 
-	tidyr::pivot_longer(cols = c(prochloro, synecho, euk), 
-		names_to = "pop", values_to = "abundance") %>%
-	mutate(pop = factor(pop, levels = names(group.colors)),
-         abundance_sd = NA,
-         Program = "HOT")
+	tidyr::pivot_longer(cols = c(prochloro, synecho, euk), names_to = "pop", 
+	  values_to = "abundance") %>%
+	mutate(pop = factor(pop, levels = names(group.colors)), abundance_sd = NA,
+    Program = "HOT")
 
 ### Use only the HOT points that have SeaFlow data
 influx_long <- influx_long[influx_long$date %in% unique(aloha_long_mean$date),]
@@ -122,7 +122,6 @@ influx_long <- influx_long[influx_long$date %in% unique(aloha_long_mean$date),]
 all_day <- bind_rows(influx_long %>% select(Program, DateTime, year, month, yday, pop, abundance, abundance_sd), 
 	aloha_long_mean %>% select(Program, DateTime, year, month, yday, pop, abundance, abundance_sd)) %>%
   mutate(Program = factor(Program, levels = c("SeaFlow", "HOT")))
-
 
 ###################
 ### DAILY MEANS ###
@@ -136,7 +135,7 @@ g <- all_day %>%
   ggplot2::ggplot(aes(x = year, y = abundance, fill = Program)) +
   ggplot2::geom_linerange(aes(ymin = abundance - abundance_sd, ymax =  abundance + abundance_sd)) +
   ggplot2::geom_point(size = 3, pch = 21) +
-  ggplot2::facet_grid(pop ~ month, scales = 'free_y') +
+  ggplot2::facet_grid(pop ~ month, scales = 'free_y', labeller = labeller(pop = pop.labels)) +
   ggplot2::theme_bw(base_size = 18) +
   ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
   ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
@@ -144,14 +143,15 @@ g <- all_day %>%
   ggplot2::labs(y = unname(latex2exp::TeX('Abundance (10$^6$ cells L$^{-1}$)')), x = 'Year')
 
 fig_name <- paste0("../Figures/HOT_abundance_daily_point_on_station_sd_SF.pdf")
-pdf(fig_name, width = 15, height = 8)
+pdf(fig_name, width = 15, height = 9)
 print(g)
 dev.off()
 
 ### Abundance property-property plot ###
 # Hourly means for abundance
 all_day_p <- all_day %>%
-  pivot_wider(names_from = Program, values_from = c(abundance, abundance_sd), id_cols = c(year, yday, pop))
+  pivot_wider(names_from = Program, values_from = c(abundance, abundance_sd), 
+    id_cols = c(year, yday, pop))
 
 # plot
 p <- list()
@@ -167,8 +167,7 @@ for (phyto in c("prochloro", "synecho", "euk")){
     xlim(0, lim[i]) +
     ylim(0, lim[i]) + 
     theme_bw(base_size = 18) +
-    labs(x = "", y = "", title = phyto)
-  
+    labs(x = "", y = "", title = pop.labels[[i]])
   i <- i + 1
 }
 
@@ -176,10 +175,9 @@ fig_name <- "../Figures/HOT_abundance_SF_vs_Influx.pdf"
 pdf(fig_name, width = 12, height = 4)
 fig <- gridExtra::grid.arrange(p[[1]], p[[2]], p[[3]],  
 	nrow = 1,widths=c(2, 2, 2, 1),
-    left =  grid::textGrob(unname(latex2exp::TeX('SeaFlow Abundance (10$^6$ cells L$^{-1}$)')), rot = 90), 
-    bottom = grid::textGrob(unname(latex2exp::TeX('Influx Abundance (10$^6$ cells L$^{-1}$)'))))
+    left =  grid::textGrob(unname(latex2exp::TeX('SeaFlow abundance (10$^6$ cells L$^{-1}$)')), rot = 90), 
+    bottom = grid::textGrob(unname(latex2exp::TeX('Influx abundance (10$^6$ cells L$^{-1}$)'))))
 dev.off()
-
 
 ### Mean + 2 sd to define bloom ###
 
@@ -197,7 +195,7 @@ g <- ggplot2::ggplot(bloom, aes(x = year, y = abundance, fill = Program)) +
     ggplot2::geom_hline(data = bloom_sf, aes(yintercept = plus_2sd, linetype = '2.0 sd'), color = 'firebrick3') +
     scale_linetype_manual(name = "Mean + 2 sd", values = c(1, 2),
         guide = guide_legend(override.aes = list(color = c("firebrick3", "black")))) +
-    ggplot2::facet_grid(rows = vars(pop), cols = vars(month), scales = 'free_y') +
+    ggplot2::facet_grid(rows = vars(pop), cols = vars(month), scales = 'free_y', labeller = labeller(pop = pop.labels)) +
     ggplot2::theme_bw(base_size = 18) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
     ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
@@ -205,12 +203,9 @@ g <- ggplot2::ggplot(bloom, aes(x = year, y = abundance, fill = Program)) +
     ggplot2::labs(y = unname(latex2exp::TeX('Abundance (10$^6$ cells L$^{-1}$)')), x = 'Year', title = 'Define blooms by abundance standard deviation')
 
 fig_name <- "../Figures/HOT_abundance_bloom_sd.pdf"
-pdf(fig_name, width = 15, height = 8)
+pdf(fig_name, width = 15, height = 9)
     print(g)
 dev.off()
-
-
-
 
 ####################
 ### HOURLY MEANS ###
@@ -248,9 +243,7 @@ all_aloha_hr_no_outlier$year <- as.factor(all_aloha_hr_no_outlier$year)
 # Remove low abundance points first.
 all_aloha_hr_robust <- subset(all_aloha_hr_no_outlier, abundance > 0.02) # 0.048 = About 30 cells per 3-min file
 
-
 ### Plot  DIAMETER and QC during time of day
-
 
 # Get number of days in each population:
 all_aloha_hr_robust <- all_aloha_hr_robust %>% 
@@ -272,25 +265,24 @@ g1 <- all_aloha_hr_robust %>%
     geom_line(alpha = 0.25, color = prog.colors['SeaFlow'], linewidth = 2) +
     theme_bw(base_size = 20) +
     scale_y_continuous(sec.axis = sec_axis(~ coef*.^expo, labels = NULL)) +
-    facet_wrap(vars(pop), ncol = 1, scales = 'free_y') +
+    facet_wrap(vars(pop), ncol = 1, scales = 'free_y', labeller = labeller(pop = pop.labels)) +
     geom_text(aes(label = paste0(' n = ', n_days), x = -Inf, y = Inf), hjust = 0, vjust = 1.5, check_overlap = T, size = 6) +
-    ggplot2::labs(y = unname(latex2exp::TeX('Diameter ($\\mu$m)')), x = 'Hours since Dawn')
+    ggplot2::labs(y = unname(latex2exp::TeX('Diameter ($\\mu$m)')), x = 'Hours since dawn')
 
 g2 <- all_aloha_hr_robust %>%
     ggplot(aes(y = diam, group = sundate)) +
     geom_histogram(alpha = 0.5, fill = "grey30") +
     geom_hline(data = med_diam, aes(yintercept = median)) +
     theme_bw(base_size = 20) +
-    scale_y_continuous(labels = NULL, sec.axis = sec_axis(~ 1000*coef*.^expo, name = unname(latex2exp::TeX('Carbon Quota (fg C cell$^{-1}$)')))) +
+    scale_y_continuous(labels = NULL, sec.axis = sec_axis(~ 1000*coef*.^expo, name = unname(latex2exp::TeX('Carbon quota (fg C cell$^{-1}$)')))) +
     ggplot2::theme(legend.position = 'none') +
-    facet_wrap(vars(pop), ncol = 1, scales = 'free_y') +
+    facet_wrap(vars(pop), ncol = 1, scales = 'free_y', labeller = labeller(pop = pop.labels)) +
     ggplot2::labs(x = 'No. hours', y = '')
 
 fig_name <- '../Figures/HOT_diameter_Qc_summary.pdf'
 pdf(fig_name, width = 8, height = 12)
     gridExtra::grid.arrange(g1, g2, ncol = 2)
 dev.off()
-
 
 ###################
 ### RHYTHMICITY ###
@@ -329,9 +321,9 @@ g <- ggplot2::ggplot(rain_trough, aes(TOD_2, fill = TOD_2)) +
     ggplot2::theme_bw(base_size = 22) +
      ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23')) +
     ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1L)) +
-    ggplot2::facet_wrap(vars(pop), ncol = 1) +
+    ggplot2::facet_wrap(vars(pop), ncol = 1, labeller = labeller(pop = pop.labels)) +
     ggpubr::rotate_x_text() +
-    ggplot2::labs(x = 'Abundance Minima Hour (HST)', y = 'Percent of Cruises')
+    ggplot2::labs(x = 'Abundance minima hour (HST)', y = 'Percent of cruises')
 print(g)
 dev.off()
 
@@ -348,9 +340,9 @@ g <- ggplot2::ggplot(rain_peak, aes(TOD_2, fill = TOD_2)) +
     ggplot2::theme_bw(base_size = 22) +
     ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23'), drop = FALSE) +
     ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1L)) +
-    ggplot2::facet_wrap(vars(pop), ncol = 1) +
+    ggplot2::facet_wrap(vars(pop), ncol = 1, labeller = labeller(pop = pop.labels)) +
     ggpubr::rotate_x_text() +
-    ggplot2::labs(x = 'Carbon Quota Maxima Hour (HST)', y = 'Percent of Cruises')
+    ggplot2::labs(x = 'Carbon quota maxima hour (HST)', y = 'Percent of cruises')
 print(g)
 dev.off()
 
@@ -496,11 +488,11 @@ ind_mo <- which(as.character(tform_exp$date) %in% mo_list_date)
 tform_exp$month[ind_mo] <- tform_exp$month[ind_mo] + 1
 
 fig_name <- "../figures/HOT_C_specific_growth_daily_sd.pdf"
-pdf(fig_name, width = 15, height = 8)
+pdf(fig_name, width = 15, height = 9)
 g <- ggplot2::ggplot(tform_exp, aes(x = year, y = r)) +
     ggplot2::geom_linerange(ggplot2::aes(x = year, ymin = rmin, ymax = rmax), color = prog.colors[1]) +
     ggplot2::geom_point(pch = 21, size = 3, fill = prog.colors[1]) +
-    ggplot2::facet_grid(rows = vars(pop), cols = vars(month)) +
+    ggplot2::facet_grid(rows = vars(pop), cols = vars(month), labeller = labeller(pop = pop.labels)) +
     ggplot2::theme_bw(base_size = 18) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
     ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
@@ -599,19 +591,19 @@ C_SF$param <- factor(C_SF$param, levels = c('Biomass', 'Productivity'))
 C_SF$pop <- factor(C_SF$pop, levels = c('croco', 'euk', 'synecho', 'prochloro'))
 
 fig_name <- "../Figures/HOT_all_carbon_stacked_per_cruise.pdf"
-pdf(fig_name, width = 15, height = 8)
+pdf(fig_name, width = 15, height = 9)
 p <- ggplot2::ggplot(C_SF, aes(x = year)) +
     ggplot2::geom_bar(aes(y = value, fill = pop), alpha = 0.5, color = NA, position = 'stack', stat = "identity") +
     ggplot2::theme_bw(base_size = 18) +
-    ggplot2::scale_fill_manual(values = group.colors) +
-    ggplot2::guides(fill = ggplot2::guide_legend(title = "population")) +
+    ggplot2::scale_fill_manual(values = group.colors, labels = pop.labels) +
+    ggplot2::guides(fill = ggplot2::guide_legend(title = "Population")) +
     ggplot2::geom_linerange(data = C_HOT_incl, aes(x = year, ymin = min, ymax = max, color = 'HOT')) +
     ggplot2::geom_point(data = C_HOT_incl, aes(y = value, color = 'HOT'), fill = 'white', pch = 21, size = 3, alpha = 1) +
     ggplot2::scale_color_manual(name = "", values = c("HOT" = "black")) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
     ggplot2::facet_grid(cols = vars(month), rows = vars(param), scales = 'free_y') +
     ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-    ggplot2::labs(x = 'Year', y = unname(latex2exp::TeX('Productivity ($\\mu$g C L$^{-1}$ d$^{-1}$) or Biomass ($\\mu$g C L$^{-1}$)')))
+    ggplot2::labs(x = 'Year', y = unname(latex2exp::TeX('Productivity ($\\mu$g C L$^{-1}$ d$^{-1}$) or biomass ($\\mu$g C L$^{-1}$)')))
 print(p)
 dev.off()
 
@@ -720,9 +712,8 @@ p1 <- data_variance %>%
   xlab("") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-  facet_grid( pop ~ .) #+
+  facet_grid( pop ~ ., labeller = labeller(pop = pop.labels)) #+
   #geom_text(data = ta, aes(x = x, y = y, label = label))
-print(p1)
 
 png(paste0("../Figures/Variability_gap.png"), width = 1000, height = 2000, res = 300)
 print(p1)
@@ -799,7 +790,7 @@ p2 <- data_variance %>%
   xlab("") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-  facet_grid( pop ~ .) #+
+  facet_grid( pop ~ ., labeller = labeller(pop = pop.labels)) #+
   #geom_text(data = tb, aes(x = x, y = y, label = label))
 
 print(p2)
