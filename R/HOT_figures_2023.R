@@ -475,13 +475,12 @@ r_stats <- tform_exp %>%
               r_25 = quantile(r, probs = c(0.25)), r_75 = quantile(r, probs = c(0.75)),
               r_min = min(r), r_max = max(r))
 
-r_stats$mean_plus_6sd <- r_stats$r_mean + 6*r_stats$r_sd
-
 tform_exp$rmax <- tform_exp$r + tform_exp$r_se
 tform_exp$rmin <- tform_exp$r - tform_exp$r_se
 
 tform_exp$year <- lubridate::year(tform_exp$date)
 tform_exp$month <- lubridate::month(tform_exp$date)
+
 # Split double cruises by bumping late month cruises to the next month for KM2011/HOT323
 mo_list_date <- c("2020-09-27", "2020-09-28", "2020-09-29")    
 ind_mo <- which(as.character(tform_exp$date) %in% mo_list_date)
@@ -561,15 +560,11 @@ SF_cruise <- SF_PP %>%
 # HOT
 PCH <- HOT_Clive[, c('month', 'year')]
 PCH$param <- 'Biomass'
-PCH$value <- HOT_Clive$C_live_250
-PCH$min <- HOT_Clive$C_live_150
-PCH$max <- HOT_Clive$C_live_400
+PCH$value <- HOT_Clive$PC_ugpL
 
 PPH <- PP_cruise[, c('month', 'year')]
 PPH$param <- 'Productivity'
 PPH$value <- PP_cruise$mean_PP
-PPH$min <- NA
-PPH$max <- NA
 
 C_HOT <- rbind(PCH, PPH)
 C_HOT$param <- factor(C_HOT$param, levels = c('Biomass', 'Productivity'))
@@ -597,7 +592,6 @@ p <- ggplot2::ggplot(C_SF, aes(x = year)) +
     ggplot2::theme_bw(base_size = 18) +
     ggplot2::scale_fill_manual(values = group.colors, labels = pop.labels) +
     ggplot2::guides(fill = ggplot2::guide_legend(title = "Population")) +
-    ggplot2::geom_linerange(data = C_HOT_incl, aes(x = year, ymin = min, ymax = max, color = 'HOT')) +
     ggplot2::geom_point(data = C_HOT_incl, aes(y = value, color = 'HOT'), fill = 'white', pch = 21, size = 3, alpha = 1) +
     ggplot2::scale_color_manual(name = "", values = c("HOT" = "black")) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
