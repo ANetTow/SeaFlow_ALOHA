@@ -264,6 +264,7 @@ g1 <- all_aloha_hr_robust %>%
     geom_rect(aes(xmin = 12, xmax = 24, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
     geom_line(alpha = 0.25, color = prog.colors['SeaFlow'], linewidth = 2) +
     theme_bw(base_size = 20) +
+    scale_x_continuous(breaks = seq(0, 24, by = 6), expand = c(0, 0)) +
     scale_y_continuous(sec.axis = sec_axis(~ coef*.^expo, labels = NULL)) +
     facet_wrap(vars(pop), ncol = 1, scales = 'free_y', labeller = labeller(pop = pop.labels)) +
     geom_text(aes(label = paste0(' n = ', n_days), x = -Inf, y = Inf), hjust = 0, vjust = 1.5, check_overlap = T, size = 6) +
@@ -702,18 +703,31 @@ data_variance <- bind_rows(data_h, data_d, data_m, data_s, data_y) %>%
   mutate(resolution = factor(resolution, levels = c("hourly","daily","monthly","seasonal","annual")),
          pop = factor(pop, levels = c("prochloro","synecho","euk","croco")))
 
-ta <- data.frame(x = "hourly", y = 1.25, pop = factor("prochloro", levels = c("prochloro","synecho","euk","croco")), label = "a") # label
+data_variance <- dplyr::filter(data_variance, !is.na(var))
 
-p1 <- data_variance %>% 
-  ggplot(aes(resolution, var)) +
-  geom_boxplot(position = "dodge", alpha = 0.5, fill = "darkgrey", outlier.shape = NA) + 
-  ylab(" Fold change in cell abundance") +
-  scale_y_continuous(limits = c(0, 1.5)) +
+box_stats <- data_variance %>%
+  group_by(pop, resolution) %>%
+  summarize(n = dplyr::n(), min_var = min(var, na.rm = TRUE), max_var = max(var, na.rm = TRUE), 
+            q25 = quantile(var, probs = 0.25, na.rm = TRUE), q50 = quantile(var, probs = 0.5, na.rm = TRUE), 
+            q75 = quantile(var, probs = 0.75, na.rm = TRUE))
+
+box_stats <- box_stats %>% 
+  group_by(pop, resolution) %>%
+  mutate(IQR = q75 - q25, outlier1 = q25 - IQR*1.5, ymin = max(min_var, outlier1),
+         outlier2 = q75 + IQR*1.5, ymax = min(max_var, outlier2)) # calculate whiskers
+
+box_stats <- box_stats %>%
+  group_by(pop) %>%
+  mutate(offset = 0.1*max(ymax))
+
+p1 <- ggplot(box_stats) +
+  geom_boxplot(aes(x = resolution, ymin = ymin, lower = q25, middle = q50, upper = q75, ymax = ymax), stat = "identity", fill = "darkgrey", alpha = 0.5) +
+  geom_text(aes(x = resolution, y = ymax + offset, label = n)) +
+  ylab("Fold change in cell abundance") +
   xlab("") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-  facet_grid( pop ~ ., labeller = labeller(pop = pop.labels)) #+
-  #geom_text(data = ta, aes(x = x, y = y, label = label))
+  facet_grid( pop ~ ., scales = "free_y", labeller = labeller(pop = pop.labels))
 
 png(paste0("../Figures/Variability_gap.png"), width = 1000, height = 2000, res = 300)
 print(p1)
@@ -744,7 +758,6 @@ for(phyto in pop_list){
     print(D)
   }
 }
-
 
 ### Specific Growth ###
 
@@ -779,21 +792,31 @@ data_variance <- bind_rows(data_d, data_m, data_s, data_y) %>%
   mutate(resolution = factor(resolution, levels = c("daily","monthly","seasonal","annual")),
          pop = factor(pop, levels = c("prochloro","synecho","euk","croco")))
 
-tb <- data.frame(x = factor("daily", levels = c("daily","monthly","seasonal","annual")), 
-  y = 0.6, pop = factor("prochloro", levels = c("prochloro","synecho","euk","croco")), label = "b") # label
+data_variance <- dplyr::filter(data_variance, !is.na(var))
 
-p2 <- data_variance %>% 
-  ggplot(aes(resolution, var)) +
-  geom_boxplot(position = "dodge", alpha = 0.5, fill = "darkgrey", outlier.shape = NA) + 
+box_stats <- data_variance %>%
+  group_by(pop, resolution) %>%
+  summarize(n = dplyr::n(), min_var = min(var, na.rm = TRUE), max_var = max(var, na.rm = TRUE), 
+            q25 = quantile(var, probs = 0.25, na.rm = TRUE), q50 = quantile(var, probs = 0.5, na.rm = TRUE), 
+            q75 = quantile(var, probs = 0.75, na.rm = TRUE))
+
+box_stats <- box_stats %>% 
+  group_by(pop, resolution) %>%
+  mutate(IQR = q75 - q25, outlier1 = q25 - IQR*1.5, ymin = max(min_var, outlier1),
+         outlier2 = q75 + IQR*1.5, ymax = min(max_var, outlier2)) # calculate whiskers
+
+box_stats <- box_stats %>%
+  group_by(pop) %>%
+  mutate(offset = 0.1*max(ymax))
+
+p2 <- ggplot(box_stats) +
+  geom_boxplot(aes(x = resolution, ymin = ymin, lower = q25, middle = q50, upper = q75, ymax = ymax), stat = "identity", fill = "darkgrey", alpha = 0.5) +
+  geom_text(aes(x = resolution, y = ymax + offset, label = n)) +
   ylab(" Fold change in cellular growth rate") +
-  scale_y_continuous(limits = c(0, 0.75)) +
   xlab("") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
-  facet_grid( pop ~ ., labeller = labeller(pop = pop.labels)) #+
-  #geom_text(data = tb, aes(x = x, y = y, label = label))
-
-print(p2)
+  facet_grid( pop ~ ., labeller = labeller(pop = pop.labels)) 
 
 png(paste0("../Figures/Variability_growth_gap.png"), width = 1000, height = 2000, res = 300)
 print(p2)
