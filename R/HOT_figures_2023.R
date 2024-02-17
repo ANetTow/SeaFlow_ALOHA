@@ -268,7 +268,7 @@ g1 <- all_aloha_hr_robust %>%
     scale_y_continuous(sec.axis = sec_axis(~ coef*.^expo, labels = NULL)) +
     facet_wrap(vars(pop), ncol = 1, scales = 'free_y', labeller = labeller(pop = pop.labels)) +
     geom_text(aes(label = paste0(' n = ', n_days), x = -Inf, y = Inf), hjust = 0, vjust = 1.5, check_overlap = T, size = 6) +
-    ggplot2::labs(y = unname(latex2exp::TeX('Diameter ($\\mu$m)')), x = 'Hours since dawn')
+    ggplot2::labs(y = unname(latex2exp::TeX('Diameter ($\\mu$m)')), x = 'Hours since sunrise')
 
 g2 <- all_aloha_hr_robust %>%
     ggplot(aes(y = diam, group = sundate)) +
@@ -298,29 +298,27 @@ sig <- big_rain$pVal <= 0.05    # Significant p-values--are they periodic or not
 big_rain$periodic <- sig
 big_rain$pop <- factor(big_rain$pop, levels = names(group.colors))
 
-# Group into 2-hour blocks
-TOD_2 <- cut(big_rain$peak_hour, breaks = c(-0.5, 1.5, 3.5, 5.5, 7.5, 9.5, 11.5, 13.5, 15.5, 17.5, 19.5, 21.5, 23.5),
-    labels = c( '00:00 - 01:59', '02:00 - 03:59', '04:00 - 05:59', '06:00 - 07:59', '08:00 - 09:59', '10:00 - 11:59', '12:00 - 13:59', '14:00 - 15:59', '16:00 - 17:59', '18:00 - 19:59', '20:00 - 21:59', '22:00 - 23:59'))
-TOD_2 <- factor(TOD_2, levels = c('Aperiodic', '00:00 - 01:59', '02:00 - 03:59', '04:00 - 05:59', '06:00 - 07:59', '08:00 - 09:59', '10:00 - 11:59', '12:00 - 13:59', '14:00 - 15:59', '16:00 - 17:59', '18:00 - 19:59', '20:00 - 21:59', '22:00 - 23:59'))
-TOD_2[which(big_rain$periodic == FALSE)] <- 'Aperiodic'
-big_rain$TOD_2 <- TOD_2
+# allow for aperiodic
+TOD <- factor(big_rain$peak_hour, levels = c('Aperiodic', as.character(0:23)))
+TOD[which(big_rain$periodic == FALSE)] <- 'Aperiodic'
+big_rain$TOD <- TOD
 
 # abundance
 rain_trough <- subset(big_rain, param == "abundance")
 n.cruise <- length(unique(rain_trough$cruise))
 
 count_trough <- rain_trough %>%
-    group_by(pop, TOD_2) %>%
+    group_by(pop, TOD) %>%
     summarise(n = n())
 
-fig_name <- "../Figures/HOT_rain_abundance_bar_2hr_nocolor.pdf"
+fig_name <- "../Figures/HOT_rain_abundance_bar_nocolor.pdf"
 pdf(fig_name, width = 8, height = 10)
-g <- ggplot2::ggplot(rain_trough, aes(TOD_2, fill = TOD_2)) +
-    geom_rect(aes(xmin = -Inf, xmax = 4.5, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
-    geom_rect(aes(xmin = 10.5, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
+g <- ggplot2::ggplot(rain_trough, aes(TOD, fill = TOD)) +
+    geom_rect(aes(xmin = -Inf, xmax = 8, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
+    geom_rect(aes(xmin = 20, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
     ggplot2::geom_bar(aes(y = after_stat(count)/n.cruise), alpha = 1, colour = 'black', fill = 'white', show.legend = FALSE) +
     ggplot2::theme_bw(base_size = 22) +
-     ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23')) +
+    ggplot2::scale_x_discrete(labels = c('NA', as.character(0:23)), drop = FALSE) +
     ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1L)) +
     ggplot2::facet_wrap(vars(pop), ncol = 1, labeller = labeller(pop = pop.labels)) +
     ggpubr::rotate_x_text() +
@@ -328,18 +326,19 @@ g <- ggplot2::ggplot(rain_trough, aes(TOD_2, fill = TOD_2)) +
 print(g)
 dev.off()
 
+
 # QC
 rain_peak <- subset(big_rain, param == "Qc")
 n.cruise <- length(unique(rain_peak$cruise))
 
-fig_name <- "../Figures/HOT_rain_Qc_bar_2hr_nocolor.pdf"
+fig_name <- "../Figures/HOT_rain_Qc_bar_nocolor.pdf"
 pdf(fig_name, width = 8, height = 10)
-g <- ggplot2::ggplot(rain_peak, aes(TOD_2, fill = TOD_2)) +
-    geom_rect(aes(xmin = -Inf, xmax = 4.5, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
-    geom_rect(aes(xmin = 10.5, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
+g <- ggplot2::ggplot(rain_peak, aes(TOD, fill = TOD_2)) +
+    geom_rect(aes(xmin = -Inf, xmax = 8, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
+    geom_rect(aes(xmin = 20, xmax = Inf, ymin = -Inf, ymax = Inf), fill = "grey", color = 'grey') +
     ggplot2::geom_bar(aes(y = after_stat(count)/n.cruise), alpha = 1, colour = 'black', fill = 'white', show.legend = FALSE) +
     ggplot2::theme_bw(base_size = 22) +
-    ggplot2::scale_x_discrete(labels = c('NA', '1', '3', '5', '7', '9', '11', '13', '15', '17', '19', '21', '23'), drop = FALSE) +
+    ggplot2::scale_x_discrete(labels = c('NA', as.character(0:23)), drop = FALSE) +
     ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1L)) +
     ggplot2::facet_wrap(vars(pop), ncol = 1, labeller = labeller(pop = pop.labels)) +
     ggpubr::rotate_x_text() +
@@ -753,6 +752,38 @@ for(phyto in pop_list){
   }
 }
 
+### Fold change abundance versus specific growth
+
+
+data_d_dated <- aloha_long %>% 
+  dplyr::group_by(pop, time = lubridate::floor_date(time, unit = "days")) %>%
+  dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
+  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE)), gap = as.numeric(diff(time)), date = time[1:length(time)-1]) %>%
+  dplyr::mutate(resolution = "daily")
+data_d_dated <- dplyr::filter(data_d_dated, gap < 3)  # exclude gaps >= 3 days
+
+growth_fold_abund <- merge(data_d_dated, tform_exp, by = c("date", "pop"))
+
+linreg <- growth_fold_abund %>%
+  dplyr::nest_by(pop) %>%
+  mutate(model = list(lm(var ~ r, data = data))) 
+
+Rsq <- linreg %>% 
+  summarise(rsq = summary(model)$r.squared)
+
+g <- ggplot(growth_fold_abund, aes(x = r, y = var)) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ x, geom = "smooth") +
+  ylab("Fold change in cell abundance") +
+  xlab(latex2exp::TeX('Net scatter-based cellular growth rate (h$^{-1}$)')) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  facet_grid( pop ~ ., scales = "free_y", labeller = labeller(pop = pop.labels))
+
+png(paste0("../Figures/growth_fold_abundance.png"), width = 1000, height = 2000, res = 300)
+print(g)
+dev.off()
+    
 ### Specific Growth ###
 
 data_d <- tform_exp %>% 

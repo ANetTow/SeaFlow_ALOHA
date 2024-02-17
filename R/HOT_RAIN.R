@@ -9,8 +9,6 @@ library(tidyverse)
 library(viridis)
 library(readxl)
 library(rain)
-#renv::activate("~/Desktop/renvtest/popcycle/")
-library(popcycle)
 
 ###############
 ### SeaFlow ###
