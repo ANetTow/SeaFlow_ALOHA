@@ -331,6 +331,10 @@ dev.off()
 rain_peak <- subset(big_rain, param == "Qc")
 n.cruise <- length(unique(rain_peak$cruise))
 
+count_peak <- rain_peak %>%
+  group_by(pop, TOD) %>%
+  summarise(n = n())
+
 fig_name <- "../Figures/HOT_rain_Qc_bar_nocolor.pdf"
 pdf(fig_name, width = 8, height = 10)
 g <- ggplot2::ggplot(rain_peak, aes(TOD, fill = TOD_2)) +
@@ -874,3 +878,55 @@ for(phyto in pop_list){
 }
 
 # No significant differences among distributions
+
+###################
+### CHLOROPHYLL ###
+###################
+
+# Get Chla from HOT
+HOT_Chl <- read.csv(paste0("../Data/HOT_Chl.csv"), skip = 6, header = F)
+Chl_head <- read.csv(paste0("../Data/HOT_Chl.csv"), skip = 3, nrows = 1)
+colnames(HOT_Chl) <- colnames(Chl_head)
+
+HOT_Chl$cruise <- paste0('HOT', substr(as.character(HOT_Chl$botid), 1, 3))
+HOT_Chl[HOT_Chl == -9] <- NA
+HOT_Chl$date <- str_pad(HOT_Chl$date, 6, side = "left", pad = 0)
+HOT_Chl$time <- str_pad(HOT_Chl$time, 6, side = "left", pad = 0)
+HOT_Chl$date <- as.POSIXct(paste0(HOT_Chl$date, " ", HOT_Chl$time), format = "%m%d%y %H%M%S", tz = "UTC")
+
+HOT_Chl$day <- lubridate::yday(HOT_Chl$date)
+HOT_Chl$year <- lubridate::year(HOT_Chl$date)
+HOT_Chl$month <- lubridate::month(HOT_Chl$date) 
+
+# Split double cruises by bumping late month cruises to the next month for KM2011/HOT323, HOT319 borders Jan and Feb
+mo_list_date <- c(as.POSIXct("2020-01-31 02:14:22", tz = "UTC"), as.POSIXct("2020-09-28 00:59:58", tz = "UTC"), as.POSIXct("2020-09-29 01:07:07", tz = "UTC"))    
+ind_mo <- which(HOT_Chl$date %in% mo_list_date)
+HOT_Chl$month[ind_mo] <- HOT_Chl$month[ind_mo] + 1
+
+HOT_Chl_mo <- HOT_Chl %>%  
+  dplyr::group_by(cruise) %>%
+  dplyr::summarize(chla = mean(chl, na.rm = TRUE), month = mean(month), year = mean(year))
+
+# Merge with SeaFlow biomass
+
+Chl_all <- merge(HOT_Chl_mo, total_aloha_cruise, by = c('month', 'year'))
+
+Chl_all$bloom <- FALSE
+ind_b1 <- which(Chl_all$month == 7 & Chl_all$year == 2016)	# Eukaryote blooms: July 2016, Aug 2016, Aug 2017, Aug 2019
+ind_b2 <- which(Chl_all$month == 8 & Chl_all$year == 2016)
+ind_b3 <- which(Chl_all$month == 8 & Chl_all$year == 2017)
+ind_b4 <- which(Chl_all$month == 8 & Chl_all$year == 2019)
+ind_bloom <- c(ind_b1, ind_b2, ind_b3, ind_b4)
+Chl_all$bloom[ind_bloom] <- TRUE
+
+g <- ggplot(Chl_all) +
+  geom_point(aes(x = total_biomass, y = chla), pch = 21, size = 3, fill = "white") +
+  geom_abline(slope = 1/128, intercept = 0) +
+  geom_abline(slope = 1/80, intercept = 0, linetype = 2) +
+  geom_abline(slope = 1/176, intercept = 0, linetype = 2) +
+  labs(x = latex2exp::TeX('Biomass measured by SeaFlow ($\\mu$g C L$^{-1}$)'), y = latex2exp::TeX('Fluorometric chlorophyll a ($\\mu$g C L$^{-1}$)')) +
+  theme_bw(base_size = 18)
+
+png(paste0("../Figures/Chla_vs_biomass.png"), width = 2000, height = 2000, res = 300)
+  print(g)
+dev.off()
