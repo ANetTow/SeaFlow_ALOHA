@@ -136,14 +136,14 @@ g <- all_day %>%
   ggplot2::geom_linerange(aes(ymin = abundance - abundance_sd, ymax =  abundance + abundance_sd)) +
   ggplot2::geom_point(size = 3, pch = 21) +
   ggplot2::facet_grid(pop ~ month, scales = 'free_y', labeller = labeller(pop = pop.labels)) +
-  ggplot2::theme_bw(base_size = 18) +
+  ggplot2::theme_bw(base_size = 20) +
   ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
   ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
   ggplot2::scale_fill_manual(values = prog.colors) +
   ggplot2::labs(y = unname(latex2exp::TeX('Abundance (10$^6$ cells L$^{-1}$)')), x = 'Year')
 
 fig_name <- paste0("../Figures/HOT_abundance_daily_point_on_station_sd_SF.pdf")
-pdf(fig_name, width = 15, height = 9)
+pdf(fig_name, width = 15, height = 10)
 print(g)
 dev.off()
 
@@ -196,14 +196,14 @@ g <- ggplot2::ggplot(bloom, aes(x = year, y = abundance, fill = Program)) +
     scale_linetype_manual(name = "Mean + 2 sd", values = c(1, 2),
         guide = guide_legend(override.aes = list(color = c("firebrick3", "black")))) +
     ggplot2::facet_grid(rows = vars(pop), cols = vars(month), scales = 'free_y', labeller = labeller(pop = pop.labels)) +
-    ggplot2::theme_bw(base_size = 18) +
+    ggplot2::theme_bw(base_size = 20) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
     ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
     ggplot2::scale_fill_manual(values = prog.colors) +
     ggplot2::labs(y = unname(latex2exp::TeX('Abundance (10$^6$ cells L$^{-1}$)')), x = 'Year', title = 'Define blooms by abundance standard deviation')
 
 fig_name <- "../Figures/HOT_abundance_bloom_sd.pdf"
-pdf(fig_name, width = 15, height = 9)
+pdf(fig_name, width = 15, height = 10)
     print(g)
 dev.off()
 
@@ -491,12 +491,12 @@ ind_mo <- which(as.character(tform_exp$date) %in% mo_list_date)
 tform_exp$month[ind_mo] <- tform_exp$month[ind_mo] + 1
 
 fig_name <- "../figures/HOT_C_specific_growth_daily_sd.pdf"
-pdf(fig_name, width = 15, height = 9)
+pdf(fig_name, width = 15, height = 10)
 g <- ggplot2::ggplot(tform_exp, aes(x = year, y = r)) +
     ggplot2::geom_linerange(ggplot2::aes(x = year, ymin = rmin, ymax = rmax), color = prog.colors[1]) +
     ggplot2::geom_point(pch = 21, size = 3, fill = prog.colors[1]) +
     ggplot2::facet_grid(rows = vars(pop), cols = vars(month), labeller = labeller(pop = pop.labels)) +
-    ggplot2::theme_bw(base_size = 18) +
+    ggplot2::theme_bw(base_size = 20) +
     ggplot2::scale_x_continuous(breaks=seq(2014, 2021, 1), labels=c("2014", '',  "2016", '', '2018', '', '2020', ''), minor_breaks = seq(2015, 2021, 2)) +
     ggplot2::theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
     ggplot2::labs(y = unname(latex2exp::TeX('Net scatter-based cellular growth rate (h$^{-1}$)')), x = 'Year')
@@ -590,10 +590,10 @@ C_SF$param <- factor(C_SF$param, levels = c('Biomass', 'Productivity'))
 C_SF$pop <- factor(C_SF$pop, levels = c('croco', 'euk', 'synecho', 'prochloro'))
 
 fig_name <- "../Figures/HOT_all_carbon_stacked_per_cruise.pdf"
-pdf(fig_name, width = 15, height = 9)
+pdf(fig_name, width = 15, height = 10)
 p <- ggplot2::ggplot(C_SF, aes(x = year)) +
     ggplot2::geom_bar(aes(y = value, fill = pop), alpha = 0.5, color = NA, position = 'stack', stat = "identity") +
-    ggplot2::theme_bw(base_size = 18) +
+    ggplot2::theme_bw(base_size = 20) +
     ggplot2::scale_fill_manual(values = group.colors, labels = pop.labels) +
     ggplot2::guides(fill = ggplot2::guide_legend(title = "Population")) +
     ggplot2::geom_point(data = C_HOT_incl, aes(y = value, color = 'HOT'), fill = 'white', pch = 21, size = 3, alpha = 1) +
@@ -774,6 +774,15 @@ linreg <- growth_fold_abund %>%
 
 Rsq <- linreg %>% 
   summarise(rsq = summary(model)$r.squared)
+
+lm_fold <- growth_fold_abund %>%
+  dplyr::group_by(pop) %>%
+  tidyr::nest() %>%
+  dplyr::mutate(
+    model = purrr::map(data, ~lm(var ~ r, data = .)),
+    tidied = purrr::map(model, broom::tidy)
+  ) %>%
+  tidyr::unnest(tidied)
 
 g <- ggplot(growth_fold_abund, aes(x = r, y = var)) +
   geom_point() +
