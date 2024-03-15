@@ -762,20 +762,38 @@ for(phyto in pop_list){
 data_d_dated <- aloha_long %>% 
   dplyr::group_by(pop, time = lubridate::floor_date(time, unit = "days")) %>%
   dplyr::summarize_all(function(x) mean(x, na.rm = TRUE)) %>%
-  dplyr::summarize(var = abs(diff(abundance)/mean(abundance, na.rm = TRUE)), gap = as.numeric(diff(time)), date = time[1:length(time)-1]) %>%
+  dplyr::summarize(abund = abundance[1:length(time)-1], var = abs(diff(abundance)/mean(abundance, na.rm = TRUE)), gap = as.numeric(diff(time)), date = time[1:length(time)-1]) %>%
   dplyr::mutate(resolution = "daily")
 data_d_dated <- dplyr::filter(data_d_dated, gap < 3)  # exclude gaps >= 3 days
 
 growth_fold_abund <- merge(data_d_dated, tform_exp, by = c("date", "pop"))
 
-linreg <- growth_fold_abund %>%
+# abundance 
+linreg1 <- growth_fold_abund %>%
+  dplyr::nest_by(pop) %>%
+  mutate(model = list(lm(abund ~ r, data = data))) 
+
+Rsq1 <- linreg1 %>% 
+  summarise(rsq = summary(model)$r.squared)
+
+lm_fold1 <- growth_fold_abund %>%
+  dplyr::group_by(pop) %>%
+  tidyr::nest() %>%
+  dplyr::mutate(
+    model = purrr::map(data, ~lm(abund ~ r, data = .)),
+    tidied = purrr::map(model, broom::tidy)
+  ) %>%
+  tidyr::unnest(tidied)
+
+# fold change abundance
+linreg2 <- growth_fold_abund %>%
   dplyr::nest_by(pop) %>%
   mutate(model = list(lm(var ~ r, data = data))) 
 
-Rsq <- linreg %>% 
+Rsq2 <- linreg2 %>% 
   summarise(rsq = summary(model)$r.squared)
 
-lm_fold <- growth_fold_abund %>%
+lm_fold2 <- growth_fold_abund %>%
   dplyr::group_by(pop) %>%
   tidyr::nest() %>%
   dplyr::mutate(
@@ -784,7 +802,16 @@ lm_fold <- growth_fold_abund %>%
   ) %>%
   tidyr::unnest(tidied)
 
-g <- ggplot(growth_fold_abund, aes(x = r, y = var)) +
+g1 <- ggplot(growth_fold_abund, aes(x = r, y = abund)) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ x, geom = "smooth") +
+  ylab(unname(latex2exp::TeX('Daily mean abundance (10$^6$ cells L$^{-1}$)'))) +
+  xlab(latex2exp::TeX('Net scatter-based cellular growth rate (h$^{-1}$)')) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  facet_grid( pop ~ ., scales = "free_y", labeller = labeller(pop = pop.labels))
+
+g2 <- ggplot(growth_fold_abund, aes(x = r, y = var)) +
   geom_point() +
   stat_smooth(method = "lm", formula = y ~ x, geom = "smooth") +
   ylab("Fold change in cell abundance") +
@@ -793,8 +820,8 @@ g <- ggplot(growth_fold_abund, aes(x = r, y = var)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
   facet_grid( pop ~ ., scales = "free_y", labeller = labeller(pop = pop.labels))
 
-png(paste0("../Figures/growth_fold_abundance.png"), width = 1000, height = 2000, res = 300)
-print(g)
+png(paste0("../Figures/growth_fold_abundance.png"), width = 2000, height = 2000, res = 300)
+gridExtra::grid.arrange(g1, g2, nrow = 1)
 dev.off()
     
 ### Specific Growth ###
